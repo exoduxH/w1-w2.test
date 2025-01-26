@@ -11,18 +11,17 @@ weatherForm.addEventListener("submit", async (event) => {
     displayLoadingState();
     try {
       const weatherData = await getWeatherDataByCity(city);
-      displayWeatherInfo(weatherData);
+      const forecastData = await getWeatherForecastByCity(city);
+      displayWeatherInfo(weatherData, forecastData);
     } catch (error) {
       console.error(error);
       displayError(error.message);
     }
   } else {
-    // Wenn keine Stadt eingegeben wurde, GPS verwenden
     getGeoLocationAndFetchWeather();
   }
 });
 
-// Funktion, um Wetterdaten basierend auf der Stadt abzurufen
 async function getWeatherDataByCity(city) {
   const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}`;
   try {
@@ -36,13 +35,12 @@ async function getWeatherDataByCity(city) {
   }
 }
 
-// Funktion, um Wetterdaten basierend auf den GPS-Koordinaten abzurufen
-async function getWeatherDataByCoordinates(lat, lon) {
+async function getWeatherDataByCoords(lat, lon) {
   const apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}`;
   try {
     const response = await fetch(apiUrl);
     if (!response.ok) {
-      throw new Error("Could not fetch weather data for your location");
+      throw new Error("Location not found or network issue");
     }
     return await response.json();
   } catch (error) {
@@ -50,31 +48,55 @@ async function getWeatherDataByCoordinates(lat, lon) {
   }
 }
 
-// Funktion, um die GPS-Daten des Benutzers zu erhalten
+async function getWeatherForecastByCity(city) {
+  const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}`;
+  try {
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+      throw new Error("City not found or network issue");
+    }
+    return await response.json();
+  } catch (error) {
+    throw new Error("Failed to fetch weather forecast. Please try again later.");
+  }
+}
+
+async function getWeatherForecastByCoords(lat, lon) {
+  const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}`;
+  try {
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+      throw new Error("Location not found or network issue");
+    }
+    return await response.json();
+  } catch (error) {
+    throw new Error("Failed to fetch weather forecast. Please try again later.");
+  }
+}
+
 function getGeoLocationAndFetchWeather() {
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const weatherData = await getWeatherDataByCoordinates(latitude, longitude);
-          displayWeatherInfo(weatherData);
-        } catch (error) {
-          console.error(error);
-          displayError(error.message);
-        }
-      },
-      (error) => {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      displayLoadingState();
+      try {
+        const weatherData = await getWeatherDataByCoords(latitude, longitude);
+        const forecastData = await getWeatherForecastByCoords(latitude, longitude);
+        displayWeatherInfo(weatherData, forecastData);
+      } catch (error) {
         console.error(error);
-        displayError("Unable to retrieve your location.");
+        displayError(error.message);
       }
-    );
+    }, (error) => {
+      console.error(error);
+      displayError("Failed to get geolocation. Please try again later.");
+    });
   } else {
     displayError("Geolocation is not supported by this browser.");
   }
 }
 
-function displayWeatherInfo(data) {
+function displayWeatherInfo(data, forecast) {
   const {
     name: city,
     main: { temp, humidity },
@@ -107,6 +129,21 @@ function displayWeatherInfo(data) {
   card.appendChild(humidityDisplay);
   card.appendChild(descDisplay);
   card.appendChild(weatherEmoji);
+
+  const forecastTitle = document.createElement("h2");
+  forecastTitle.textContent = "3-Day Forecast";
+  card.appendChild(forecastTitle);
+
+  for (let i = 0; i < 3; i++) {
+    const forecastItem = forecast.list[i * 8]; // 8 intervals per day
+    const forecastDate = new Date(forecastItem.dt * 1000);
+    const forecastTemp = (forecastItem.main.temp - 273.15).toFixed(1);
+    const forecastDesc = forecastItem.weather[0].description;
+
+    const forecastDisplay = document.createElement("p");
+    forecastDisplay.textContent = `${forecastDate.toDateString()}: ${forecastTemp}°C, ${forecastDesc}`;
+    card.appendChild(forecastDisplay);
+  }
 }
 
 function getWeatherEmoji(weatherId) {
